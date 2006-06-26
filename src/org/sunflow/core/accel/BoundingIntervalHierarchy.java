@@ -204,14 +204,8 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
             rightOrig = right; // save this for later
             for (int i = left; i <= right;) {
                 int obj = indices[i];
-                float minb = objects[obj].getBound(2 * axis + 0); // objectBounds[6
-                // * obj + 2
-                // * axis +
-                // 0];
-                float maxb = objects[obj].getBound(2 * axis + 1); // objectBounds[6
-                // * obj + 2
-                // * axis +
-                // 1];
+                float minb = objects[obj].getBound(2 * axis + 0);
+                float maxb = objects[obj].getBound(2 * axis + 1);
                 float center = (minb + maxb) * 0.5f;
                 if (center < split) {
                     // stay left
@@ -233,6 +227,7 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
                 // all left
                 if (axis == prevAxis && split == prevSplit) {
                     // we are stuck here - create a leaf
+                    stats.updateLeaf(depth, right - left + 1);
                     createNode(tempTree, nodeIndex, left, right);
                     return;
                 }
@@ -243,6 +238,7 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
                 right = rightOrig;
                 if (axis == prevAxis && split == prevSplit) {
                     // we are stuck here - create a leaf
+                    stats.updateLeaf(depth, right - left + 1);
                     createNode(tempTree, nodeIndex, left, right);
                     return;
                 }
@@ -298,11 +294,11 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
         if (nl > 0)
             subdivide(left, right, tempTree, indices, gridBoxL, nextIndex, depth + 1, stats);
         else
-            stats.updateLeaf(depth, 0);
+            stats.updateLeaf(depth + 1, 0);
         if (nr > 0)
             subdivide(right + 1, rightOrig, tempTree, indices, gridBoxR, nextIndex + 3, depth + 1, stats);
         else
-            stats.updateLeaf(depth, 0);
+            stats.updateLeaf(depth + 1, 0);
     }
 
     public BoundingBox getBounds() {
@@ -389,6 +385,14 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
         int offsetYBack3 = offsetYBack * 3;
         int offsetZBack3 = offsetZBack * 3;
 
+        // avoid always adding 1 during the inner loop
+        offsetXFront++;
+        offsetYFront++;
+        offsetZFront++;
+        offsetXBack++;
+        offsetYBack++;
+        offsetZBack++;
+
         int[] nodeStack = state.iscratch;
         float[] tStack = state.fscratch;
 
@@ -397,29 +401,24 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
         int node = 0;
 
         while (true) {
-            boolean isLeaf;
             pushloop: while (true) {
-                int axis = tree[node] & (3 << 30);
-                // leaf?
-                isLeaf = (axis == (3 << 30));
-                if (isLeaf)
-                    break;
-                int offset = tree[node] & ~(3 << 30);
+                int tn = tree[node];
+                int axis = tn & (3 << 30);
+                int offset = tn & ~(3 << 30);
                 switch (axis) {
                     case 0: {
                         // x axis
-                        float tf = (Float.intBitsToFloat(tree[node + 1 + offsetXFront]) - orgX) * invDirX;
-                        float tb = (Float.intBitsToFloat(tree[node + 1 + offsetXBack]) - orgX) * invDirX;
-                        int back = offset + offsetXBack3;
-                        int front = offset + offsetXFront3;
+                        float tf = (Float.intBitsToFloat(tree[node + offsetXFront]) - orgX) * invDirX;
+                        float tb = (Float.intBitsToFloat(tree[node + offsetXBack]) - orgX) * invDirX;
                         // ray passes between clip zones
                         if (tf < intervalMin && tb > intervalMax)
                             break pushloop;
+                        int back = offset + offsetXBack3;
                         node = back;
                         // ray passes through far node only
                         if (tf < intervalMin)
                             continue;
-                        node = front;
+                        node = offset + offsetXFront3; // front
                         // ray passes through near node only
                         if (tb > intervalMax)
                             continue;
@@ -435,18 +434,44 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
                         continue;
                     }
                     case 1 << 30: {
-                        float tf = (Float.intBitsToFloat(tree[node + 1 + offsetYFront]) - orgY) * invDirY;
-                        float tb = (Float.intBitsToFloat(tree[node + 1 + offsetYBack]) - orgY) * invDirY;
-                        int back = offset + offsetYBack3;
-                        int front = offset + offsetYFront3;
+                        float tf = (Float.intBitsToFloat(tree[node + offsetYFront]) - orgY) * invDirY;
+                        float tb = (Float.intBitsToFloat(tree[node + offsetYBack]) - orgY) * invDirY;
                         // ray passes between clip zones
                         if (tf < intervalMin && tb > intervalMax)
                             break pushloop;
+                        int back = offset + offsetYBack3;
                         node = back;
                         // ray passes through far node only
                         if (tf < intervalMin)
                             continue;
-                        node = front;
+                        node = offset + offsetYFront3; // front
+                        // ray passes through near node only
+                        if (tb > intervalMax)
+                            continue;
+                        // ray passes through both nodes
+                        // push back node
+                        nodeStack[nstackPos] = back;
+                        tStack[tstackPos + 0] = (tb >= intervalMin) ? tb : intervalMin;
+                        tStack[tstackPos + 1] = intervalMax;
+                        nstackPos++;
+                        tstackPos += 2;
+                        // update ray interval for front node
+                        intervalMax = (tf <= intervalMax) ? tf : intervalMax;
+                        continue;
+                    }
+                    case 2 << 30: {
+                        // z axis
+                        float tf = (Float.intBitsToFloat(tree[node + offsetZFront]) - orgZ) * invDirZ;
+                        float tb = (Float.intBitsToFloat(tree[node + offsetZBack]) - orgZ) * invDirZ;
+                        // ray passes between clip zones
+                        if (tf < intervalMin && tb > intervalMax)
+                            break pushloop;
+                        int back = offset + offsetZBack3;
+                        node = back;
+                        // ray passes through far node only
+                        if (tf < intervalMin)
+                            continue;
+                        node = offset + offsetZFront3; // front
                         // ray passes through near node only
                         if (tb > intervalMax)
                             continue;
@@ -462,45 +487,17 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
                         continue;
                     }
                     default: {
-                        // z axis
-                        float tf = (Float.intBitsToFloat(tree[node + 1 + offsetZFront]) - orgZ) * invDirZ;
-                        float tb = (Float.intBitsToFloat(tree[node + 1 + offsetZBack]) - orgZ) * invDirZ;
-                        int back = offset + offsetZBack3;
-                        int front = offset + offsetZFront3;
-                        // ray passes between clip zones
-                        if (tf < intervalMin && tb > intervalMax)
-                            break pushloop;
-                        node = back;
-                        // ray passes through far node only
-                        if (tf < intervalMin)
-                            continue;
-                        node = front;
-                        // ray passes through near node only
-                        if (tb > intervalMax)
-                            continue;
-                        // ray passes through both nodes
-                        // push back node
-                        nodeStack[nstackPos] = back;
-                        tStack[tstackPos + 0] = (tb >= intervalMin) ? tb : intervalMin;
-                        tStack[tstackPos + 1] = intervalMax;
-                        nstackPos++;
-                        tstackPos += 2;
-                        // update ray interval for front node
-                        intervalMax = (tf <= intervalMax) ? tf : intervalMax;
-                        continue;
+                        // leaf - test some objects
+                        int n = tree[node + 1];
+                        while (n > 0) {
+                            objects[offset].intersect(r, state);
+                            n--;
+                            offset++;
+                        }
+                        break pushloop;
                     }
                 } // switch
             } // traversal loop
-            // test some objects
-            if (isLeaf) {
-                int n = tree[node + 1];
-                if (n > 0) {
-                    int o = tree[node] & ~(3 << 30);
-                    for (int i = 0; i < n; i++) {
-                        objects[o + i].intersect(r, state);
-                    }
-                }
-            }
             do {
                 // stack is empty?
                 if (nstackPos == 0)
@@ -511,6 +508,7 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
                 node = nodeStack[nstackPos];
                 intervalMin = tStack[tstackPos + 0];
                 intervalMax = tStack[tstackPos + 1];
+                // early termination
             } while (r.getMax() < intervalMin);
         }
     }

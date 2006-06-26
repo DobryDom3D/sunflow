@@ -1,4 +1,5 @@
 v0.06.4
+* Optimized the traversal for KDTree and BoudingIntervalHierarchy a little
 * Upgraded to Janino 2.4.4
 * Initial implementation of the Bounding Interval Hierarchy paper
 * Small fix to TexturedWard and TexturedPhong shaders (null check)

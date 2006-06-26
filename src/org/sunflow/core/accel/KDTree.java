@@ -784,21 +784,18 @@ public class KDTree implements IntersectionAccelerator {
         int node = 0;
 
         while (true) {
-            while (true) {
-                int axis = tree[node] & (3 << 30);
-                // leaf?
-                if (axis == (3 << 30))
-                    break;
-                int offset = tree[node] & ~(3 << 30);
+            pushloop: while (true) {
+                int tn = tree[node];
+                int axis = tn & (3 << 30);
+                int offset = tn & ~(3 << 30);
                 switch (axis) {
                     case 0: {
                         float d = (Float.intBitsToFloat(tree[node + 1]) - orgX) * invDirX;
                         int back = offset + offsetXBack;
-                        int front = offset + offsetXFront;
                         node = back;
                         if (d < intervalMin)
                             continue;
-                        node = front;
+                        node = offset + offsetXFront; // front
                         if (d > intervalMax)
                             continue;
                         // push back node
@@ -815,11 +812,30 @@ public class KDTree implements IntersectionAccelerator {
                         // y axis
                         float d = (Float.intBitsToFloat(tree[node + 1]) - orgY) * invDirY;
                         int back = offset + offsetYBack;
-                        int front = offset + offsetYFront;
                         node = back;
                         if (d < intervalMin)
                             continue;
-                        node = front;
+                        node = offset + offsetYFront; // front
+                        if (d > intervalMax)
+                            continue;
+                        // push back node
+                        nodeStack[nstackPos] = back;
+                        tStack[tstackPos + 0] = (d >= intervalMin) ? d : intervalMin;
+                        tStack[tstackPos + 1] = intervalMax;
+                        nstackPos++;
+                        tstackPos += 2;
+                        // update ray interval for front node
+                        intervalMax = (d <= intervalMax) ? d : intervalMax;
+                        continue;
+                    }
+                    case 2 << 30: {
+                        // z axis
+                        float d = (Float.intBitsToFloat(tree[node + 1]) - orgZ) * invDirZ;
+                        int back = offset + offsetZBack;
+                        node = back;
+                        if (d < intervalMin)
+                            continue;
+                        node = offset + offsetZFront; // front
                         if (d > intervalMax)
                             continue;
                         // push back node
@@ -833,46 +849,30 @@ public class KDTree implements IntersectionAccelerator {
                         continue;
                     }
                     default: {
-                        // z axis
-                        float d = (Float.intBitsToFloat(tree[node + 1]) - orgZ) * invDirZ;
-                        int back = offset + offsetZBack;
-                        int front = offset + offsetZFront;
-                        node = back;
-                        if (d < intervalMin)
-                            continue;
-                        node = front;
-                        if (d > intervalMax)
-                            continue;
-                        // push back node
-                        nodeStack[nstackPos] = back;
-                        tStack[tstackPos + 0] = (d >= intervalMin) ? d : intervalMin;
-                        tStack[tstackPos + 1] = intervalMax;
-                        nstackPos++;
-                        tstackPos += 2;
-                        // update ray interval for front node
-                        intervalMax = (d <= intervalMax) ? d : intervalMax;
-                        continue;
+                        // leaf - test some objects
+                        int n = tree[node + 1];
+                        while (n > 0) {
+                            objects[offset].intersect(r, state);
+                            n--;
+                            offset++;
+                            if (r.getMax() < intervalMax)
+                                return;
+                        }
+                        break pushloop;
                     }
                 } // switch
             } // traversal loop
-            // test some objects
-            int n = tree[node + 1];
-            if (n > 0) {
-                int o = tree[node] & ~(3 << 30);
-                for (int i = 0; i < n; i++)
-                    objects[o + i].intersect(r, state);
-                if (r.getMax() < intervalMax)
-                    return;
-            }
             // stack is empty?
-            if (nstackPos == 0)
-                return;
-            // move back up the stack
-            nstackPos--;
-            tstackPos -= 2;
-            node = nodeStack[nstackPos];
-            intervalMin = tStack[tstackPos + 0];
-            intervalMax = tStack[tstackPos + 1];
+            do {
+                if (nstackPos == 0)
+                    return;
+                // move back up the stack
+                nstackPos--;
+                tstackPos -= 2;
+                node = nodeStack[nstackPos];
+                intervalMin = tStack[tstackPos + 0];
+                intervalMax = tStack[tstackPos + 1];
+            } while (r.getMax() < intervalMin);
         }
     }
 }
