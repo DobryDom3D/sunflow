@@ -416,12 +416,16 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
                         int back = offset + offsetXBack3;
                         node = back;
                         // ray passes through far node only
-                        if (tf < intervalMin)
+                        if (tf < intervalMin) {
+                            intervalMin = (tb >= intervalMin) ? tb : intervalMin;
                             continue;
+                        }
                         node = offset + offsetXFront3; // front
                         // ray passes through near node only
-                        if (tb > intervalMax)
+                        if (tb > intervalMax) {
+                            intervalMax = (tf <= intervalMax) ? tf : intervalMax;
                             continue;
+                        }
                         // ray passes through both nodes
                         // push back node
                         nodeStack[nstackPos] = back;
@@ -442,12 +446,16 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
                         int back = offset + offsetYBack3;
                         node = back;
                         // ray passes through far node only
-                        if (tf < intervalMin)
+                        if (tf < intervalMin) {
+                            intervalMin = (tb >= intervalMin) ? tb : intervalMin;
                             continue;
+                        }
                         node = offset + offsetYFront3; // front
                         // ray passes through near node only
-                        if (tb > intervalMax)
+                        if (tb > intervalMax) {
+                            intervalMax = (tf <= intervalMax) ? tf : intervalMax;
                             continue;
+                        }
                         // ray passes through both nodes
                         // push back node
                         nodeStack[nstackPos] = back;
@@ -469,12 +477,16 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
                         int back = offset + offsetZBack3;
                         node = back;
                         // ray passes through far node only
-                        if (tf < intervalMin)
+                        if (tf < intervalMin) {
+                            intervalMin = (tb >= intervalMin) ? tb : intervalMin;
                             continue;
+                        }
                         node = offset + offsetZFront3; // front
                         // ray passes through near node only
-                        if (tb > intervalMax)
+                        if (tb > intervalMax) {
+                            intervalMax = (tf <= intervalMax) ? tf : intervalMax;
                             continue;
+                        }
                         // ray passes through both nodes
                         // push back node
                         nodeStack[nstackPos] = back;

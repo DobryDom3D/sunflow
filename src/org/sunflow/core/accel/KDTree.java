@@ -855,9 +855,9 @@ public class KDTree implements IntersectionAccelerator {
                             objects[offset].intersect(r, state);
                             n--;
                             offset++;
-                            if (r.getMax() < intervalMax)
-                                return;
                         }
+                        if (r.getMax() < intervalMax)
+                            return;
                         break pushloop;
                     }
                 } // switch
