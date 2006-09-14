@@ -100,15 +100,15 @@ public class Sphere implements BoundedPrimitive {
         float qa = rdx * rdx + rdy * rdy + rdz * rdz;
         float qb = 2 * ((rdx * rox) + (rdy * roy) + (rdz * roz));
         float qc = ((rox * rox) + (roy * roy) + (roz * roz)) - 1;
-        float[] t = Solvers.solveQuadric(qa, qb, qc);
+        double[] t = Solvers.solveQuadric(qa, qb, qc);
         if (t != null) {
             // early rejection
             if (t[0] >= r.getMax() || t[1] <= r.getMin())
                 return;
             if (t[0] > r.getMin())
-                r.setMax(t[0]);
+                r.setMax((float) t[0]);
             else
-                r.setMax(t[1]);
+                r.setMax((float) t[1]);
             state.setIntersection(this, 0, 0);
         }
     }
