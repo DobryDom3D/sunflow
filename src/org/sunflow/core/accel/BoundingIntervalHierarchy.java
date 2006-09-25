@@ -479,7 +479,8 @@ public class BoundingIntervalHierarchy implements IntersectionAccelerator {
         offsetZBack++;
 
         IntersectionState.StackNode[] stack = state.getStack();
-        int stackPos = 0;
+        int stackTop = state.getStackTop();
+        int stackPos = stackTop;
         int node = 0;
 
         while (true) {
