@@ -28,6 +28,8 @@ import org.sunflow.math.Vector3;
 public class SunSkyLight implements LightSource, PrimitiveList, Shader {
     // sunflow parameters
     private int numSkySamples;
+    // DD3D: factor applied to the radiance of the sun and of the sky
+    private float power = 1;
     private OrthoNormalBasis basis;
     private boolean groundExtendSky;
     private Color groundColor;
@@ -197,6 +199,7 @@ public class SunSkyLight implements LightSource, PrimitiveList, Shader {
         else if (up != null)
             basis = OrthoNormalBasis.makeFromW(up);
         numSkySamples = pl.getInt("samples", numSkySamples);
+        power = pl.getFloat("power", power);
         sunDirWorld = pl.getVector("sundir", sunDirWorld);
         turbidity = pl.getFloat("turbidity", turbidity);
         groundExtendSky = pl.getBoolean("ground.extendsky", groundExtendSky);
@@ -241,7 +244,8 @@ public class SunSkyLight implements LightSource, PrimitiveList, Shader {
             LightSample dest = new LightSample();
             dest.setShadowRay(new Ray(state.getPoint(), sunDirWorld));
             dest.getShadowRay().setMax(Float.MAX_VALUE);
-            dest.setRadiance(sunColor, sunColor);
+            Color scaledSunColor = sunColor.copy().mul(power);
+            dest.setRadiance(scaledSunColor, scaledSunColor);
             dest.traceShadow(state);
             state.addSample(dest);
         }
@@ -275,7 +279,7 @@ public class SunSkyLight implements LightSource, PrimitiveList, Shader {
                 LightSample dest = new LightSample();
                 dest.setShadowRay(new Ray(state.getPoint(), dir));
                 dest.getShadowRay().setMax(Float.MAX_VALUE);
-                Color radiance = getSkyRGB(localDir);
+                Color radiance = getSkyRGB(localDir).copy().mul(power);
                 dest.setRadiance(radiance, radiance);
                 dest.getDiffuseRadiance().mul(invP);
                 dest.getSpecularRadiance().mul(invP);
