@@ -79,8 +79,10 @@ public final class ShadingState implements Iterable<LightSample> {
         // EP : Added ignoreHalton parameter 
         ShadingState s = new ShadingState(previous, previous.istate, r, i, 2, false);
         s.includeLights = false;
-        s.includeSpecular = false;
-        s.reflectionDepth++;
+        // EP : Set includeSpecular to true to get the reflects
+        s.includeSpecular = true;
+        // EP : Very dirty hack to let mirror shader manage more bounces than uber shader 
+        s.reflectionDepth += 4;
         return s;
     }
 
