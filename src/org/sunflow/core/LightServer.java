@@ -150,7 +150,8 @@ class LightServer {
                         synchronized (LightServer.this) {
                             UI.taskUpdate(photonCounter);
                             photonCounter++;
-                            if (UI.taskCanceled())
+                            // EP : Manage renderer stop with interruptions
+                            if (Thread.currentThread().isInterrupted())
                                 return;
                         }
 
@@ -183,18 +184,19 @@ class LightServer {
             photonThreads[i].setPriority(scene.getThreadPriority());
             photonThreads[i].start();
         }
-        for (int i = 0; i < photonThreads.length; i++) {
-            try {
+        // EP : Moved InterruptedException out of loop to be able to stop all rendering threads
+        try {
+            for (int i = 0; i < photonThreads.length; i++) {
                 photonThreads[i].join();
-            } catch (InterruptedException e) {
-                UI.printError(Module.LIGHT, "Photon thread %d of %d was interrupted", i + 1, photonThreads.length);
-                return false;
             }
-        }
-        if (UI.taskCanceled()) {
-            UI.taskStop(); // shut down task cleanly
+        } catch (InterruptedException e) {
+            for (int i = 0; i < photonThreads.length; i++) {
+                photonThreads[i].interrupt();
+            }
+            UI.printError(Module.BCKT, "Photon thread was interrupted");
             return false;
         }
+        // EP : End of modification
         photonTimer.end();
         UI.taskStop();
         UI.printInfo(Module.LIGHT, "Tracing time for %s photons: %s", type, photonTimer.toString());
