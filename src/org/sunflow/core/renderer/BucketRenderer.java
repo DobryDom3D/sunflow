@@ -308,7 +308,9 @@ public class BucketRenderer implements ImageSampler {
                             if (Math.abs(dy) > fhs)
                                 continue;
                             float f = filter.get(dx, dy);
-                            c.madd(f, samples[s].c);
+                            // EP : Test if color isn't null
+                            if (samples[s].c != null)
+                                c.madd(f, samples[s].c);
                             a += f * samples[s].alpha;
                             weight += f;
 
