@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="Sunflow" default="jars">
+	<!-- This needs to change with every release -->
+	<property name="sunflow.version" value="0.07.3" />
+	<property name="sunflow.jdk.level" value="8" />
+	<property name="sunflow.zip.comment" value="Sunflow rendering system v${sunflow.version}" />
+	<property name="sunflow.libs" value="janino.jar" />
+	<property name="sunflow.jar.filename" value="sunflow-0.07.3i.jar" />
+
+	<!-- Basic targets -->
+	<target name="init">
+		<property name="src.dir" value="src" />
+		<property name="resources.dir" value="resources" />
+		<available file="${resources.dir}" type="dir" property="resources.present" />
+		<property name="build.dir" value="build" />
+		<property name="release.dir" value="release" />
+		<!-- build folder contains temporary files needed to create release level files -->
+		<property name="build.classes.dir" value="${build.dir}/classes" />
+		<property name="build.manifest" value="${build.dir}/sunflow.mf" />
+		<property name="build.jar" value="${build.dir}/sunflow.jar" />
+		<!-- release folder contains files which may be distributed in some way or another -->
+		<property name="release.javadoc.dir" value="${release.dir}/javadoc" />
+		<property name="release.src.zip" value="${release.dir}/sunflow-src-v${sunflow.version}.zip" />
+		<property name="release.bin.zip" value="${release.dir}/sunflow-bin-v${sunflow.version}.zip" />
+		<property name="release.data.zip" value="${release.dir}/sunflow-data-v${sunflow.version}.zip" />
+	</target>
+
+	<target name="clean" depends="init" description="Remove build files created this scripts">
+		<delete dir="${build.dir}" />
+		<delete dir="${release.dir}" />
+	</target>
+
+
+	<!-- build directory targets -->
+	<target name="compile" depends="init" description="Compile source">
+		<mkdir dir="${build.classes.dir}" />
+		<javac srcdir="${src.dir}" destdir="${build.classes.dir}" source="${sunflow.jdk.level}" target="${sunflow.jdk.level}" classpath="${sunflow.libs}">
+			<compilerarg value="-Xlint:unchecked" />
+		</javac>
+	</target>
+
+	<target name="create_manifest" description="Create the Sunflow jar manifest">
+		<echo file="${build.manifest}" append="false" message="Manifest-Version: 1.0${line.separator}" />
+	</target>
+
+	<target name="jars" depends="clean, compile, create_manifest" if="resources.present" description="Create jar files required for execution">
+		<mkdir dir="${release.dir}" />
+		<jar jarfile="${release.dir}/${sunflow.jar.filename}" manifest="${build.manifest}">
+			<fileset dir="${build.classes.dir}" >
+		        <include name="**"/>
+		        <exclude name="org/sunflow/core/parser/**"/>
+				<exclude name="**/RenderGlobalsPanel*.class"/>
+				<exclude name="**/Benchmark*.class"/>
+				<exclude name="**/ImagePanel*.class"/>
+				<exclude name="**/*FileSunflowAPI*.class"/>
+				<exclude name="SunflowGUI*.class"/>
+		    </fileset>
+		</jar>
+	</target>
+</project>
