@@ -18,6 +18,7 @@ import org.sunflow.core.Scene;
 import org.sunflow.core.SceneParser;
 import org.sunflow.core.Shader;
 import org.sunflow.core.Tesselatable;
+import org.sunflow.core.TextureCache;
 import org.sunflow.core.ParameterList.InterpolationType;
 import org.sunflow.image.ColorFactory;
 import org.sunflow.image.ColorFactory.ColorSpecificationException;
@@ -694,4 +695,12 @@ public class SunflowAPI implements SunflowAPIInterface {
     public void currentFrame(int currentFrame) {
         this.currentFrame = currentFrame;
     }
+
+    // EP : Made texture cache local to a SunFlow API instance
+    private TextureCache textureCache = new TextureCache();
+    
+    public TextureCache getTextureCache() {
+        return this.textureCache;
+    }
+    // EP : End of modification
 }

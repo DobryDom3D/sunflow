@@ -6,7 +6,6 @@ import org.sunflow.core.Ray;
 import org.sunflow.core.Shader;
 import org.sunflow.core.ShadingState;
 import org.sunflow.core.Texture;
-import org.sunflow.core.TextureCache;
 import org.sunflow.image.Color;
 import org.sunflow.math.MathUtils;
 import org.sunflow.math.OrthoNormalBasis;
@@ -36,10 +35,12 @@ public class UberShader implements Shader {
         String filename;
         filename = pl.getString("diffuse.texture", null);
         if (filename != null)
-            diffmap = TextureCache.getTexture(api.resolveTextureFilename(filename), false);
+            // EP : Made texture cache local to a SunFlow API instance
+            diffmap = api.getTextureCache().getTexture(api.resolveTextureFilename(filename), false);
         filename = pl.getString("specular.texture", null);
         if (filename != null)
-            specmap = TextureCache.getTexture(api.resolveTextureFilename(filename), false);
+            // EP : Made texture cache local to a SunFlow API instance
+            specmap = api.getTextureCache().getTexture(api.resolveTextureFilename(filename), false);
         diffBlend = MathUtils.clamp(pl.getFloat("diffuse.blend", diffBlend), 0, 1);
         specBlend = MathUtils.clamp(pl.getFloat("specular.blend", diffBlend), 0, 1);
         glossyness = MathUtils.clamp(pl.getFloat("glossyness", glossyness), 0, 1);
