@@ -1,6 +1,12 @@
 package org.sunflow.core;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.JarURLConnection;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.net.URLConnection;
 
 import org.sunflow.PluginRegistry;
 import org.sunflow.image.Bitmap;
@@ -43,6 +49,39 @@ public class Texture {
         try {
             UI.printInfo(Module.TEX, "Reading texture bitmap from: \"%s\" ...", filename);
             BitmapReader reader = PluginRegistry.bitmapReaderPlugins.createObject(extension);
+            // EP : Tolerate no extension in URLs
+            if (reader == null) {
+                try {
+                    // Choose a reader depending on the magic number of the file
+                    URL url = new URL(filename);
+                    URLConnection connection = url.openConnection();
+                    if (connection instanceof JarURLConnection) {
+                        JarURLConnection urlConnection = (JarURLConnection) connection;
+                        URL jarFileUrl = urlConnection.getJarFileURL();
+                        if (jarFileUrl.getProtocol().equalsIgnoreCase("file")) {
+                            try {
+                                if (new File(jarFileUrl.toURI()).canWrite()) {
+                                    // Refuse to use cache to be able to delete the writable files accessed with jar protocol,
+                                    // as suggested in http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=6962459
+                                    connection.setUseCaches(false);
+                                }
+                            } catch (URISyntaxException ex) {
+                                throw new IOException(ex);
+                            }
+                        }
+                    }
+                    InputStream in = connection.getInputStream();
+                    int firstByte = in.read();
+                    int secondByte = in.read();
+                    in.close();                    
+                    reader = firstByte == 0xFF && secondByte == 0xD8
+                        ? PluginRegistry.bitmapReaderPlugins.createObject("jpg")
+                        : PluginRegistry.bitmapReaderPlugins.createObject("png");
+                } catch (IOException ex) {  
+                    // Don't try to search an other reader
+                }
+            }
+            // EP : End of modification
             if (reader != null) {
                 bitmap = reader.load(filename, isLinear);
                 if (bitmap.getWidth() == 0 || bitmap.getHeight() == 0)

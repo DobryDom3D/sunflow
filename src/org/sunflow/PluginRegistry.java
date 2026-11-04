@@ -310,6 +310,8 @@ public final class PluginRegistry {
         bitmapReaderPlugins.registerPlugin("jpg", JPGBitmapReader.class);
         bitmapReaderPlugins.registerPlugin("bmp", BMPBitmapReader.class);
         bitmapReaderPlugins.registerPlugin("igi", IGIBitmapReader.class);
+        // EP : Added extension jpeg
+        bitmapReaderPlugins.registerPlugin("jpeg", JPGBitmapReader.class);
     }
 
     static {
