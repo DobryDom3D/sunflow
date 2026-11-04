@@ -316,7 +316,8 @@ public class SunSkyLight implements LightSource, PrimitiveList, Shader {
     }
 
     public Color getRadiance(ShadingState state) {
-        return getSkyRGB(basis.untransform(state.getRay().getDirection())).constrainRGB();
+        // DD3D: sky seen through glass may have to be rendered transparent
+        return org.sunflow.core.SkyTransparency.filter(state, getSkyRGB(basis.untransform(state.getRay().getDirection())).copy().constrainRGB().mul(power));
     }
 
     // EP : Reused sun sky color

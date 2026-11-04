@@ -6,10 +6,13 @@ import org.sunflow.core.Display;
 import org.sunflow.core.Filter;
 import org.sunflow.core.ImageSampler;
 import org.sunflow.core.Instance;
+import org.sunflow.core.light.ImageBasedLight;
+import org.sunflow.core.light.SunSkyLight;
 import org.sunflow.core.IntersectionState;
 import org.sunflow.core.Options;
 import org.sunflow.core.Scene;
 import org.sunflow.core.Shader;
+import org.sunflow.core.SkyTransparency;
 import org.sunflow.core.ShadingState;
 import org.sunflow.core.bucket.BucketOrderFactory;
 import org.sunflow.core.filter.BoxFilter;
@@ -41,6 +44,10 @@ public class BucketRenderer implements ImageSampler {
     private int superSampling;
     private float contrastThreshold;
     private boolean jitter;
+    // DD3D: when true, camera rays hitting the sky are given an alpha of 0 while the sky still lights the scene
+    private boolean transparentSky;
+    // DD3D: when true too, the sky seen only through refracting surfaces (glass) is transparent as well
+    private boolean transparentSkyThroughGlass;
     private boolean displayAA;
 
     // derived quantities
@@ -82,6 +89,8 @@ public class BucketRenderer implements ImageSampler {
         superSampling = options.getInt("aa.samples", superSampling);
         displayAA = options.getBoolean("aa.display", displayAA);
         jitter = options.getBoolean("aa.jitter", jitter);
+        transparentSky = options.getBoolean("transparentSky", false); // DD3D
+        transparentSkyThroughGlass = transparentSky && options.getBoolean("transparentSkyThroughGlass", false); // DD3D
         contrastThreshold = options.getFloat("aa.contrast", contrastThreshold);
 
         // limit bucket size and compute number of buckets in each direction
@@ -336,17 +345,17 @@ public class BucketRenderer implements ImageSampler {
         double q2 = QMC.halton(3, sample.i);
         if (superSampling > 1) {
             // multiple sampling
-            sample.add(scene.getRadiance(istate, x, y, q1, q2, q0, sample.i, 4, null));
+            evaluateSample(sample, true, istate, x, y, q1, q2, q0, sample.i);
             for (int i = 1; i < superSampling; i++) {
                 double time = QMC.mod1(q0 + i * invSuperSampling);
                 double lensU = QMC.mod1(q1 + QMC.halton(0, i));
                 double lensV = QMC.mod1(q2 + QMC.halton(1, i));
-                sample.add(scene.getRadiance(istate, x, y, lensU, lensV, time, sample.i + i, 4, null));
+                evaluateSample(sample, true, istate, x, y, lensU, lensV, time, sample.i + i);
             }
             sample.scale((float) invSuperSampling);
         } else {
             // single sample
-            sample.set(scene.getRadiance(istate, x, y, q1, q2, q0, sample.i, 4, null));
+            evaluateSample(sample, false, istate, x, y, q1, q2, q0, sample.i);
         }
     }
 
@@ -386,6 +395,45 @@ public class BucketRenderer implements ImageSampler {
                     ImageSample.bilerp(samples[x + i + (y + j) * sbw], s00, s01, s10, s11, i * ds, j * ds);
     }
 
+    // DD3D: returns true if state is a camera ray hit on the sky and the sky has to be rendered transparent
+    private boolean isTransparentSky(ShadingState state) {
+        if (!transparentSky || state == null)
+            return false;
+        Shader shader = state.getShader();
+        return shader instanceof SunSkyLight || shader instanceof ImageBasedLight;
+    }
+
+    // DD3D: evaluates a sample and, if the sky was seen through glass, makes it transparent through it
+    private void evaluateSample(ImageSample sample, boolean add, IntersectionState istate, float x, float y,
+                                double lensU, double lensV, double time, int i) {
+        if (transparentSkyThroughGlass)
+            SkyTransparency.clearSeen();
+        ShadingState state = scene.getRadiance(istate, x, y, lensU, lensV, time, i, 4, null);
+        Color c = null;
+        float alphaScale = 1;
+        if (transparentSkyThroughGlass && state != null && SkyTransparency.wasSeen() && !isTransparentSky(state)) {
+            // Evaluate again the same sample with a black then a white sky seen through glass:
+            // black one gives the color without sky, difference with white one gives the transmittance of glass
+            try {
+                SkyTransparency.setMode(SkyTransparency.ZERO);
+                ShadingState noSky = scene.getRadiance(istate, x, y, lensU, lensV, time, i, 4, null);
+                SkyTransparency.setMode(SkyTransparency.WHITE);
+                ShadingState whiteSky = scene.getRadiance(istate, x, y, lensU, lensV, time, i, 4, null);
+                if (noSky != null && whiteSky != null) {
+                    c = noSky.getResult().copy();
+                    Color transmittance = whiteSky.getResult().copy().sub(noSky.getResult());
+                    alphaScale = 1 - Math.max(0, Math.min(1, transmittance.getAverage()));
+                }
+            } finally {
+                SkyTransparency.setMode(SkyTransparency.NORMAL);
+            }
+        }
+        if (add)
+            sample.add(state, isTransparentSky(state), c, alphaScale);
+        else
+            sample.set(state, isTransparentSky(state), c, alphaScale);
+    }
+
     private static final class ImageSample {
         float rx, ry;
         int i, n;
@@ -407,7 +455,7 @@ public class BucketRenderer implements ImageSampler {
             nx = ny = nz = 1;
         }
 
-        final void set(ShadingState state) {
+        final void set(ShadingState state, boolean transparentSky, Color cOverride, float alphaScale) {
             if (state == null)
                 c = Color.BLACK;
             else {
@@ -420,16 +468,24 @@ public class BucketRenderer implements ImageSampler {
                     nz = state.getNormal().z;
                 }
                 alpha = state.getInstance() == null ? 0 : 1;
+                if (transparentSky) {
+                    // DD3D: no color nor alpha for the sky
+                    c = Color.black();
+                    alpha = 0;
+                } else if (cOverride != null) {
+                    c = cOverride;
+                    alpha *= alphaScale;
+                }
             }
             n = 1;
         }
 
-        final void add(ShadingState state) {
+        final void add(ShadingState state, boolean transparentSky, Color cOverride, float alphaScale) {
             if (n == 0)
                 c = Color.black();
-            if (state != null) {
-                c.add(state.getResult());
-                alpha += state.getInstance() == null ? 0 : 1;
+            if (state != null && !transparentSky) { // DD3D: no color nor alpha for the sky
+                c.add(cOverride != null ? cOverride : state.getResult());
+                alpha += (state.getInstance() == null ? 0 : 1) * (cOverride != null ? alphaScale : 1);
             }
             n++;
         }
@@ -479,4 +535,4 @@ public class BucketRenderer implements ImageSampler {
             return result;
         }
     }
-}
+}

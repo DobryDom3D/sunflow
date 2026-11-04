@@ -236,7 +236,8 @@ public class ImageBasedLight implements PrimitiveList, LightSource, Shader {
 
     public Color getRadiance(ShadingState state) {
         // lookup texture based on ray direction
-        return state.includeLights() ? getColor(basis.untransform(state.getRay().getDirection(), new Vector3())) : Color.BLACK;
+        // DD3D: sky seen through glass may have to be rendered transparent
+        return state.includeLights() ? org.sunflow.core.SkyTransparency.filter(state, getColor(basis.untransform(state.getRay().getDirection(), new Vector3()))) : Color.BLACK;
     }
 
     private Color getColor(Vector3 dir) {
