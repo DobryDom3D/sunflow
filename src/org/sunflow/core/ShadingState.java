@@ -46,9 +46,12 @@ public final class ShadingState implements Iterable<LightSample> {
     private boolean includeSpecular;
     private LightSample lightSample;
     private PhotonStore map;
+    // EP : Added transparency management  
+    private int shadowDepth;
 
     static ShadingState createPhotonState(Ray r, IntersectionState istate, int i, PhotonStore map, LightServer server) {
-        ShadingState s = new ShadingState(null, istate, r, i, 4);
+        // EP : Added ignoreHalton parameter 
+        ShadingState s = new ShadingState(null, istate, r, i, 4, false);
         s.server = server;
         s.map = map;
         return s;
@@ -56,7 +59,8 @@ public final class ShadingState implements Iterable<LightSample> {
     }
 
     static ShadingState createState(IntersectionState istate, float rx, float ry, float time, Ray r, int i, int d, LightServer server) {
-        ShadingState s = new ShadingState(null, istate, r, i, d);
+        // EP : Added ignoreHalton parameter 
+        ShadingState s = new ShadingState(null, istate, r, i, d, false);
         s.server = server;
         s.rx = rx;
         s.ry = ry;
@@ -65,13 +69,15 @@ public final class ShadingState implements Iterable<LightSample> {
     }
 
     static ShadingState createDiffuseBounceState(ShadingState previous, Ray r, int i) {
-        ShadingState s = new ShadingState(previous, previous.istate, r, i, 2);
+        // EP : Added ignoreHalton parameter 
+        ShadingState s = new ShadingState(previous, previous.istate, r, i, 2, false);
         s.diffuseDepth++;
         return s;
     }
 
     static ShadingState createGlossyBounceState(ShadingState previous, Ray r, int i) {
-        ShadingState s = new ShadingState(previous, previous.istate, r, i, 2);
+        // EP : Added ignoreHalton parameter 
+        ShadingState s = new ShadingState(previous, previous.istate, r, i, 2, false);
         s.includeLights = false;
         s.includeSpecular = false;
         s.reflectionDepth++;
@@ -79,26 +85,30 @@ public final class ShadingState implements Iterable<LightSample> {
     }
 
     static ShadingState createReflectionBounceState(ShadingState previous, Ray r, int i) {
-        ShadingState s = new ShadingState(previous, previous.istate, r, i, 2);
+        // EP : Added ignoreHalton parameter 
+        ShadingState s = new ShadingState(previous, previous.istate, r, i, 2, false);
         s.reflectionDepth++;
         return s;
     }
 
     static ShadingState createRefractionBounceState(ShadingState previous, Ray r, int i) {
-        ShadingState s = new ShadingState(previous, previous.istate, r, i, 2);
+        // EP : Added ignoreHalton parameter 
+        ShadingState s = new ShadingState(previous, previous.istate, r, i, 2, false);
         s.refractionDepth++;
         return s;
     }
 
     static ShadingState createFinalGatherState(ShadingState state, Ray r, int i) {
-        ShadingState finalGatherState = new ShadingState(state, state.istate, r, i, 2);
+        // EP : Added ignoreHalton parameter 
+        ShadingState finalGatherState = new ShadingState(state, state.istate, r, i, 2, false);
         finalGatherState.diffuseDepth++;
         finalGatherState.includeLights = false;
         finalGatherState.includeSpecular = false;
         return finalGatherState;
     }
 
-    private ShadingState(ShadingState previous, IntersectionState istate, Ray r, int i, int d) {
+    // EP : Added ignoreHalton parameter 
+    private ShadingState(ShadingState previous, IntersectionState istate, Ray r, int i, int d, boolean ignoreHalton) {
         this.r = r;
         this.istate = istate;
         this.i = i;
@@ -121,6 +131,8 @@ public final class ShadingState implements Iterable<LightSample> {
             diffuseDepth = previous.diffuseDepth;
             reflectionDepth = previous.reflectionDepth;
             refractionDepth = previous.refractionDepth;
+            // EP : copy shadow depth
+            shadowDepth = previous.shadowDepth;
             server = previous.server;
             map = previous.map;
             rx = previous.rx;
@@ -131,8 +143,12 @@ public final class ShadingState implements Iterable<LightSample> {
         behind = false;
         cosND = Float.NaN;
         includeLights = includeSpecular = true;
-        qmcD0I = QMC.halton(this.d, this.i);
-        qmcD1I = QMC.halton(this.d + 1, this.i);
+        // EP : Ignore Halton values for transparency computing
+        if (!ignoreHalton) {
+            qmcD0I = QMC.halton(this.d, this.i);
+            qmcD1I = QMC.halton(this.d + 1, this.i);
+        }
+        // EP : End of modification 
         result = null;
         bias = 0.001f;
     }
@@ -691,7 +707,8 @@ public final class ShadingState implements Iterable<LightSample> {
      * @return opacity along the shadow ray
      */
     public final Color traceShadow(Ray r) {
-        return server.getScene().traceShadow(r, istate);
+        // EP : Added  transparency management
+        return server.traceShadow(r, this);
     }
 
     /**
@@ -926,4 +943,22 @@ public final class ShadingState implements Iterable<LightSample> {
             throw new UnsupportedOperationException();
         }
     }
+
+    // EP : Added transparency management  
+    static ShadingState createShadowState(ShadingState previous, Ray r) {
+        ShadingState s = new ShadingState(previous, previous.istate, r, previous.i, previous.d, true);
+        s.shadowDepth++;
+        return s;
+    }
+    
+    public final int getShadowDepth() {
+        return shadowDepth;
+    }
+
+    public Color traceTransparentShadow(float oldMaxT) {
+        Ray tr = new Ray(r.ox, r.oy, r.oz, r.dx, r.dy, r.dz);
+        tr.setMinMax(r.getMax(), oldMaxT);
+        return traceShadow(tr);
+    }
+    // EP : end of modification  
 }

@@ -24,11 +24,14 @@ class LightServer {
     private int maxDiffuseDepth;
     private int maxReflectionDepth;
     private int maxRefractionDepth;
+    // EP : Added transparency management  
+    private int maxTransparencyDepth;
 
     // indirect illumination
     private CausticPhotonMapInterface causticPhotonMap;
     private GIEngine giEngine;
     private int photonCounter;
+
 
     LightServer(Scene scene) {
         this.scene = scene;
@@ -41,6 +44,8 @@ class LightServer {
         maxDiffuseDepth = 1;
         maxReflectionDepth = 4;
         maxRefractionDepth = 4;
+        // EP : Added transparency management
+        maxTransparencyDepth = 4;
 
         causticPhotonMap = null;
         giEngine = null;
@@ -64,6 +69,8 @@ class LightServer {
         maxDiffuseDepth = options.getInt("depths.diffuse", maxDiffuseDepth);
         maxReflectionDepth = options.getInt("depths.reflection", maxReflectionDepth);
         maxRefractionDepth = options.getInt("depths.refraction", maxRefractionDepth);
+        // EP : Added transparency management
+        maxTransparencyDepth = options.getInt("depths.transparency", maxTransparencyDepth);
         String giEngineType = options.getString("gi.engine", null);
         giEngine = PluginRegistry.giEnginePlugins.createObject(giEngineType);
         String caustics = options.getString("caustics", null);
@@ -294,7 +301,7 @@ class LightServer {
     Color shadeHit(ShadingState state) {
         state.getInstance().prepareShadingState(state);
         Shader shader = getShader(state);
-        return (shader != null) ? shader.getRadiance(state) : Color.BLACK;
+         return (shader != null) ? shader.getRadiance(state) : Color.BLACK;
     }
 
     Color traceGlossy(ShadingState previous, Ray r, int i) {
@@ -357,4 +364,28 @@ class LightServer {
         if (causticPhotonMap != null)
             causticPhotonMap.getSamples(state);
     }
+    
+    // EP : Added transparency management  
+    Color traceShadow(Ray r, ShadingState previous) {
+        float maxDist = r.getMax();
+        scene.traceShadow(r, previous.getIntersectionState());
+        if (previous.getIntersectionState().hit()) {
+            Shader previousShader = previous.getIntersectionState().instance.getShader(0);
+            if (previousShader == null || previousShader.isOpaque() || previous.getShadowDepth() >= maxTransparencyDepth) {
+                return Color.WHITE; // fully opaque hit
+            }
+            ShadingState sstate = ShadingState.createShadowState(previous, r);
+            sstate.getInstance().prepareShadingState(sstate);
+            Shader shader = getShader(sstate);
+            if (shader == null || shader.isOpaque())
+                return Color.WHITE;
+            Color opac = shader.getOpacity(sstate);
+            if (opac.isWhite())
+                return opac;
+            else
+                return opac.copy().madd(Color.sub(Color.WHITE, opac), sstate.traceTransparentShadow(maxDist));
+        } else
+            return Color.BLACK;
+    }
+    // EP : End of modification  
 }

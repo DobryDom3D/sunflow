@@ -75,7 +75,10 @@ public class JPGBitmapReader implements BitmapReader {
         byte[] pixels = new byte[3 * width * height];
         for (int y = 0, index = 0; y < height; y++) {
             for (int x = 0; x < width; x++, index += 3) {
-                int argb = bi.getRGB(x, height - 1 - y);
+                // EP : Retrieved image data with raster data 
+                // int argb = bi.getRGB(x, height - 1 - y);
+                int argb = imageBits [x + (height - 1 - y) * width];                
+                // EP : End of modification
                 pixels[index + 0] = (byte) (argb >> 16);
                 pixels[index + 1] = (byte) (argb >> 8);
                 pixels[index + 2] = (byte) argb;

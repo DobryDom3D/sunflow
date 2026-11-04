@@ -76,11 +76,16 @@ public class PNGBitmapReader implements BitmapReader {
         byte[] pixels = new byte[4 * width * height];
         for (int y = 0, index = 0; y < height; y++) {
             for (int x = 0; x < width; x++, index += 4) {
-                int argb = bi.getRGB(x, height - 1 - y);
+                // EP : Retrieved image data with raster data 
+                // int argb = bi.getRGB(x, height - 1 - y);
+                int argb = imageBits [x + (height - 1 - y) * width];                
+                // EP : End of modification
                 pixels[index + 0] = (byte) (argb >> 16);
                 pixels[index + 1] = (byte) (argb >> 8);
                 pixels[index + 2] = (byte) argb;
-                pixels[index + 3] = (byte) (argb >> 24);
+                // EP : Added opaque transparency  
+                pixels[index + 3] = opaque ? (byte)0xFF : (byte) (argb >> 24);
+                // EP : End of modification 
             }
         }
         if (!isLinear) {

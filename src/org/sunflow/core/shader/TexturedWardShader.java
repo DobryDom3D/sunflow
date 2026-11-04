@@ -26,4 +26,16 @@ public class TexturedWardShader extends AnisotropicWardShader {
     public Color getDiffuse(ShadingState state) {
         return tex.getPixel(state.getUV().x, state.getUV().y);
     }
+
+    // EP : Added transparency management  
+    @Override
+    public boolean isOpaque() {
+        return !(tex.isTransparent());
+    }
+    
+    @Override
+    public Color getOpacity(ShadingState state) {
+        return tex.getOpacity(state.getUV().x, state.getUV().y);
+    }
+    // EP : End of modification
 }
