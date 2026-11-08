@@ -36,6 +36,11 @@ public class SunSkyLight implements LightSource, PrimitiveList, Shader {
     // parameters to the model
     private Vector3 sunDirWorld;
     private float turbidity;
+    // DD3D: amount of ozone in the atmosphere in cm (NTP)
+    private static final float DEFAULT_OZONE = 0.35f;
+    private float ozone = DEFAULT_OZONE;
+    // DD3D: per channel factor of the sun color for the ozone relative to the default amount (1 by default)
+    private Color ozoneFactor = new Color(1, 1, 1);
     // derived quantities
     private Vector3 sunDir;
     private SpectralCurve sunSpectralRadiance;
@@ -92,10 +97,10 @@ public class SunSkyLight implements LightSource, PrimitiveList, Shader {
         initSunSky();
     }
 
-    private SpectralCurve computeAttenuatedSunlight(float theta, float turbidity) {
+    private SpectralCurve computeAttenuatedSunlight(float theta, float turbidity, float ozone) {
         float[] data = new float[91]; // holds the sunsky curve data
         final double alpha = 1.3;
-        final double lozone = 0.35;
+        final double lozone = ozone; // DD3D: was hard coded to 0.35
         final double w = 2.0;
         double beta = 0.04608365822050 * turbidity - 0.04586025928522;
         // Relative optical mass
@@ -131,9 +136,21 @@ public class SunSkyLight implements LightSource, PrimitiveList, Shader {
         sunDir.normalize();
         sunTheta = (float) Math.acos(MathUtils.clamp(sunDir.z, -1, 1));
         if (sunDir.z > 0) {
-            sunSpectralRadiance = computeAttenuatedSunlight(sunTheta, turbidity);
+            sunSpectralRadiance = computeAttenuatedSunlight(sunTheta, turbidity, ozone);
             // produce color suitable for rendering
             sunColor = RGBSpace.SRGB.convertXYZtoRGB(sunSpectralRadiance.toXYZ().mul(1e-4f)).constrainRGB();
+            // DD3D: getSunColor() returns the color of the sky at the sun, which doesn't depend on ozone.
+            // Apply the effect of ozone on the spectral sun color, relative to the default amount of ozone.
+            ozoneFactor = new Color(1, 1, 1);
+            if (ozone != DEFAULT_OZONE) {
+                Color defaultSunColor = RGBSpace.SRGB.convertXYZtoRGB(
+                    computeAttenuatedSunlight(sunTheta, turbidity, DEFAULT_OZONE).toXYZ().mul(1e-4f)).constrainRGB();
+                float[] with = sunColor.getRGB();
+                float[] without = defaultSunColor.getRGB();
+                ozoneFactor = new Color(without[0] > 0 ? with[0] / without[0] : 1,
+                                        without[1] > 0 ? with[1] / without[1] : 1,
+                                        without[2] > 0 ? with[2] / without[2] : 1);
+            }
         } else {
             sunSpectralRadiance = new ConstantSpectralCurve(0);
         }
@@ -202,6 +219,7 @@ public class SunSkyLight implements LightSource, PrimitiveList, Shader {
         power = pl.getFloat("power", power);
         sunDirWorld = pl.getVector("sundir", sunDirWorld);
         turbidity = pl.getFloat("turbidity", turbidity);
+        ozone = pl.getFloat("ozone", ozone);
         groundExtendSky = pl.getBoolean("ground.extendsky", groundExtendSky);
         groundColor = pl.getColor("ground.color", groundColor);
         // recompute model
@@ -322,7 +340,8 @@ public class SunSkyLight implements LightSource, PrimitiveList, Shader {
 
     // EP : Reused sun sky color
     public Color getSunColor() {
-        return getSkyRGB(basis.untransform(sunDirWorld)).constrainRGB();
+        // DD3D: scaled by the effect of ozone
+        return getSkyRGB(basis.untransform(sunDirWorld)).constrainRGB().mul(ozoneFactor);
     }
     // EP : End of modification
     
